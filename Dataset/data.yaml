@@ -1,0 +1,20 @@
+train: C:/Users/Samanyu/PycharmProjects/PythonProject1/Dataset/Train/images
+val: C:/Users/Samanyu/PycharmProjects/PythonProject1/Dataset/Validation/images
+test: C:/Users/Samanyu/PycharmProjects/PythonProject1/Dataset/Test/images
+
+# number of classes
+nc: 10
+
+# class names in order of label IDs (0 → 9)
+names: [
+  'Hardhat',
+  'Mask',
+  'NO-Hardhat',
+  'NO-Mask',
+  'NO-Safety Vest',
+  'Person',
+  'Safety Cone',
+  'Safety Vest',
+  'Machinery',
+  'Vehicle'
+]
