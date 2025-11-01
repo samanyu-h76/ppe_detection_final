@@ -1,0 +1,30 @@
+# --- data & outputs ---
+Dataset/
+detections*/
+runs/
+*.jpg
+*.png
+*.jpeg
+*.mp4
+*.avi
+
+# --- models / big binaries ---
+*.pt
+*.onnx
+*.engine
+*.pth
+*.zip
+*.tar
+
+# --- envs & IDE ---
+.venv/
+venv/
+__pycache__/
+*.log
+.ipynb_checkpoints/
+.idea/
+*.iml
+
+# --- system junk ---
+.DS_Store
+Thumbs.db
