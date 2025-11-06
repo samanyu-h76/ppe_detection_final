@@ -1,67 +1,56 @@
 import os
-import requests
 from pathlib import Path
-import streamlit as st
 import subprocess
-import torch
+import streamlit as st
 import gdown
+import torch
 from PIL import Image
 
-# -------------------------------
-# Streamlit page setup
-# -------------------------------
-st.set_page_config(page_title="PPE Detection System", page_icon="🦺", layout="wide")
-st.title("🦺 PPE Compliance Detection System")
-st.write("Upload an image to detect PPE items like helmets, masks, and vests.")
-
-# -------------------------------
-# Download model from URL in secrets (only once)
-# -------------------------------
+# ---------- download weights once ----------
 MODEL_DIR = "models"
 MODEL_PATH = os.path.join(MODEL_DIR, "best.pt")
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 def download_weights_if_needed():
-    # If a bad/corrupt file exists (often tiny HTML), delete and redownload
-    if os.path.exists(MODEL_PATH):
-        if os.path.getsize(MODEL_PATH) < 1_000_000:  # <1MB is definitely wrong for a .pt
-            os.remove(MODEL_PATH)
+    # delete corrupt HTML downloads
+    if os.path.exists(MODEL_PATH) and os.path.getsize(MODEL_PATH) < 1_000_000:
+        os.remove(MODEL_PATH)
 
     if not os.path.exists(MODEL_PATH):
         st.info("Downloading model weights…")
-        # You can provide either MODEL_URL or GDRIVE_FILE_ID in secrets
-        if "MODEL_URL" in st.secrets:  # can be a normal Google Drive share link
+        if "MODEL_URL" in st.secrets:
+            # gdown handles normal Drive share links
             gdown.download(st.secrets["MODEL_URL"], MODEL_PATH, quiet=False, fuzzy=True)
         elif "GDRIVE_FILE_ID" in st.secrets:
             gdown.download(f"https://drive.google.com/uc?id={st.secrets['GDRIVE_FILE_ID']}",
                            MODEL_PATH, quiet=False)
         else:
-            raise RuntimeError("Add MODEL_URL or GDRIVE_FILE_ID to Streamlit Secrets.")
+            st.error("Add MODEL_URL or GDRIVE_FILE_ID to Streamlit Secrets.")
+            st.stop()
 
 download_weights_if_needed()
 
+# ---------- load YOLOv5 model safely ----------
 @st.cache_resource(show_spinner=True)
 def load_model():
     try:
-        # Skip GitHub API validation + refresh cache
         mdl = torch.hub.load(
             'ultralytics/yolov5:v6.2',
             'custom',
             path=MODEL_PATH,
             force_reload=True,
-            trust_repo=True,          # <-- critical: bypass API validation
+            trust_repo=True,     # avoid GitHub API validation errors
         )
     except Exception as e:
-        st.warning(f"Hub load failed ({e}). Cloning YOLOv5 v6.2 locally as fallback…")
+        # fallback: shallow clone v6.2 locally then load as local
+        st.warning(f"Torch Hub failed ({e}). Cloning YOLOv5 v6.2 locally…")
         repo_dir = Path("yolov5_v62_local")
         if not repo_dir.exists():
-            # shallow clone of the exact tag
             subprocess.run(
                 ["git", "clone", "--depth", "1", "--branch", "v6.2",
                  "https://github.com/ultralytics/yolov5.git", str(repo_dir)],
                 check=True,
             )
-        # Load from the freshly cloned local repo
         mdl = torch.hub.load(
             str(repo_dir),
             'custom',
@@ -69,55 +58,55 @@ def load_model():
             source='local',
             force_reload=True,
         )
-    mdl.conf = 0.25
+    # make detections a bit easier to see
+    mdl.conf = 0.20   # lower if you still see no boxes (e.g., 0.15)
+    mdl.iou = 0.45
     return mdl
 
-# -------------------------------
-# File uploader
-# -------------------------------
+try:
+    model = load_model()
+except Exception as e:
+    st.error(f"Model failed to load: {e}")
+    st.stop()   # <- prevents NameError later
+
+# ---------- UI ----------
+st.set_page_config(page_title="PPE Detection System", page_icon="🦺", layout="wide")
+st.title("🦺 PPE Compliance Detection System")
+st.write("Upload an image to detect PPE items like helmets, masks, and vests.")
 uploaded_file = st.file_uploader("Upload an Image", type=["jpg", "jpeg", "png"])
 
-# -------------------------------
-# Compliance Logic
-# -------------------------------
+# ---------- compliance logic ----------
 def get_compliance(detections):
-    """
-    detections: list of detected class names (strings)
-    """
-    # Presence flags
-    has_hat = 'Hardhat' in detections
+    has_hat  = 'Hardhat' in detections
     has_mask = 'Mask' in detections
     has_vest = 'Safety Vest' in detections
-
-    # Absence flags
-    no_hat = 'NO-Hardhat' in detections
+    no_hat  = 'NO-Hardhat' in detections
     no_mask = 'NO-Mask' in detections
     no_vest = 'NO-Safety Vest' in detections
 
-    # Compliance decision
     if has_hat and has_mask and has_vest and not (no_hat or no_mask or no_vest):
         return "🟢 Fully Compliant"
     elif no_hat and no_mask and no_vest:
         return "🔴 Non-Compliant"
     else:
-        return "🟡 Partially Compliant"  # one or two missing, or mixed signals
+        return "🟡 Partially Compliant"
 
-# -------------------------------
-# Inference
-# -------------------------------
+# ---------- inference ----------
 if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Uploaded Image", use_column_width=True)
 
-    results = model(image)
-    detections = results.pandas().xyxy[0]['name'].tolist()
+    # run YOLO and render boxes
+    results = model(image, size=640)
+    df = results.pandas().xyxy[0]
+    names = df['name'].tolist()
 
+    rendered = results.render()[0]          # numpy array (RGB)
     st.subheader("Detection Results")
-    st.image(results.render()[0], caption="Detected PPE Items", use_column_width=True)
+    st.image(rendered, caption="Detected PPE Items", use_column_width=True)
 
-    st.write("**Detected Objects:**", ", ".join(sorted(set(detections))) or "None")
-    st.markdown(f"### Compliance Status: {get_compliance(detections)}")
+    st.write("**Detected Objects:**", ", ".join(sorted(set(names))) or "None")
+    st.markdown(f"### Compliance Status: {get_compliance(names)}")
 
-    # Save detections (optional)
     os.makedirs("detections", exist_ok=True)
     results.save(save_dir="detections")
