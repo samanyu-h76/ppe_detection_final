@@ -2,7 +2,6 @@ streamlit==1.36.0
 torch==2.5.1
 torchvision==0.20.1
 pandas
-seaborn
 numpy
 pillow
 opencv-python-headless
@@ -10,4 +9,5 @@ matplotlib
 PyYAML
 tqdm
 requests
+seaborn
 gdown
