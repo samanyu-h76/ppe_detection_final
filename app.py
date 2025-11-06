@@ -1,6 +1,8 @@
 import os
 import requests
+from pathlib import Path
 import streamlit as st
+import subprocess
 import torch
 import gdown
 from PIL import Image
@@ -40,15 +42,35 @@ download_weights_if_needed()
 
 @st.cache_resource(show_spinner=True)
 def load_model():
-    # Pin YOLOv5 version and force hub reload to avoid stale cache
-    mdl = torch.hub.load('ultralytics/yolov5:v6.2',
-                         'custom',
-                         path=MODEL_PATH,
-                         force_reload=True)   # <- important
+    try:
+        # Skip GitHub API validation + refresh cache
+        mdl = torch.hub.load(
+            'ultralytics/yolov5:v6.2',
+            'custom',
+            path=MODEL_PATH,
+            force_reload=True,
+            trust_repo=True,          # <-- critical: bypass API validation
+        )
+    except Exception as e:
+        st.warning(f"Hub load failed ({e}). Cloning YOLOv5 v6.2 locally as fallback…")
+        repo_dir = Path("yolov5_v62_local")
+        if not repo_dir.exists():
+            # shallow clone of the exact tag
+            subprocess.run(
+                ["git", "clone", "--depth", "1", "--branch", "v6.2",
+                 "https://github.com/ultralytics/yolov5.git", str(repo_dir)],
+                check=True,
+            )
+        # Load from the freshly cloned local repo
+        mdl = torch.hub.load(
+            str(repo_dir),
+            'custom',
+            path=MODEL_PATH,
+            source='local',
+            force_reload=True,
+        )
     mdl.conf = 0.25
     return mdl
-
-model = load_model()
 
 # -------------------------------
 # File uploader
