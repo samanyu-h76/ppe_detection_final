@@ -32,10 +32,11 @@ if not os.path.exists(MODEL_PATH):
 # -------------------------------
 @st.cache_resource(show_spinner=True)
 def load_model():
-    # No source='local' and no yolov5 folder required
-    mdl = torch.hub.load('ultralytics/yolov5', 'custom', path=MODEL_PATH)
-    mdl.conf = 0.25  # confidence threshold (tune if needed)
+    # Pin to YOLOv5 v6.2 which doesn't require the ultralytics package
+    mdl = torch.hub.load('ultralytics/yolov5:v6.2', 'custom', path=MODEL_PATH)
+    mdl.conf = 0.25
     return mdl
+
 
 model = load_model()
 
