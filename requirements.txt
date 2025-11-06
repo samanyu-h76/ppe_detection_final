@@ -1,26 +1,11 @@
-streamlit
-gitpython
-matplotlib
-numpy
-opencv-python
-pillow
-psutil  # system resources
-PyYAML
-requests
-scipy
-thop # FLOPs computation
-torch # see https://pytorch.org/get-started/locally (recommended)
-torchvision
-tqdm
-ultralytics # https://ultralytics.com
+streamlit==1.36.0
+torch==2.2.1
+torchvision==0.17.1
 pandas
-seaborn
-packaging  
-setuptools
-
-
-# Extras ----------------------------------------------------------------------
-# ipython  # interactive notebook
-# mss  # screenshots
-# albumentations>=1.0.3
-# pycocotools>=2.0.6  # COCO mAP
+numpy
+pillow
+opencv-python-headless
+matplotlib
+PyYAML
+tqdm
+requests
