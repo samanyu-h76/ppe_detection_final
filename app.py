@@ -2,6 +2,7 @@ import os
 import requests
 import streamlit as st
 import torch
+import gdown
 from PIL import Image
 
 # -------------------------------
@@ -18,25 +19,34 @@ MODEL_DIR = "models"
 MODEL_PATH = os.path.join(MODEL_DIR, "best.pt")
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-if not os.path.exists(MODEL_PATH):
-    # Put a direct-download link in Streamlit Cloud → Settings → Secrets: MODEL_URL="https://drive.google.com/uc?export=download&id=FILEID"
-    url = st.secrets["MODEL_URL"]
-    st.info("Downloading model weights… first run may take a moment.")
-    r = requests.get(url, allow_redirects=True)
-    r.raise_for_status()
-    with open(MODEL_PATH, "wb") as f:
-        f.write(r.content)
+def download_weights_if_needed():
+    # If a bad/corrupt file exists (often tiny HTML), delete and redownload
+    if os.path.exists(MODEL_PATH):
+        if os.path.getsize(MODEL_PATH) < 1_000_000:  # <1MB is definitely wrong for a .pt
+            os.remove(MODEL_PATH)
 
-# -------------------------------
-# Load YOLOv5 model (from GitHub, not local folder)
-# -------------------------------
+    if not os.path.exists(MODEL_PATH):
+        st.info("Downloading model weights…")
+        # You can provide either MODEL_URL or GDRIVE_FILE_ID in secrets
+        if "MODEL_URL" in st.secrets:  # can be a normal Google Drive share link
+            gdown.download(st.secrets["MODEL_URL"], MODEL_PATH, quiet=False, fuzzy=True)
+        elif "GDRIVE_FILE_ID" in st.secrets:
+            gdown.download(f"https://drive.google.com/uc?id={st.secrets['GDRIVE_FILE_ID']}",
+                           MODEL_PATH, quiet=False)
+        else:
+            raise RuntimeError("Add MODEL_URL or GDRIVE_FILE_ID to Streamlit Secrets.")
+
+download_weights_if_needed()
+
 @st.cache_resource(show_spinner=True)
 def load_model():
-    # Pin to YOLOv5 v6.2 which doesn't require the ultralytics package
-    mdl = torch.hub.load('ultralytics/yolov5:v6.2', 'custom', path=MODEL_PATH)
+    # Pin YOLOv5 version and force hub reload to avoid stale cache
+    mdl = torch.hub.load('ultralytics/yolov5:v6.2',
+                         'custom',
+                         path=MODEL_PATH,
+                         force_reload=True)   # <- important
     mdl.conf = 0.25
     return mdl
-
 
 model = load_model()
 
