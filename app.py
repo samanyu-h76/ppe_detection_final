@@ -1,3 +1,26 @@
+# ---- stdlib shadowing + bad backport guard (top of app.py) ----
+import sys, importlib, subprocess
+
+# Ensure stdlib/site-packages come before CWD so local files don't shadow stdlib
+if sys.path:
+    cwd = sys.path[0]
+    sys.path = sys.path[1:] + [cwd]
+
+# If a third-party 'pathlib' package is installed (a directory with __init__.py),
+# uninstall it so the real stdlib 'pathlib.py' is used.
+try:
+    import pathlib as _pl
+    pl_file = getattr(_pl, "__file__", "") or ""
+    if "site-packages" in pl_file and pl_file.endswith("pathlib/__init__.py"):
+        # remove the backport package that breaks YOLOv5 imports
+        subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "pathlib"], check=False)
+        importlib.invalidate_caches()
+        del sys.modules["pathlib"]
+        import pathlib as _pl  # reload stdlib module
+except Exception:
+    pass
+# ---------------------------------------------------------------
+
 import os
 from pathlib import Path
 import subprocess
